@@ -2,51 +2,167 @@
   "x402Version": 1,
   "name": "x402-activities",
   "description": "Tours and activities search via Amadeus — agents find bookable experiences by location",
+  "homepage": "https://nirholas.github.io/x402-activities/",
+  "repository": "https://github.com/nirholas/x402-activities",
+  "contact": "nichxbt@gmail.com",
+  "skill": "https://github.com/nirholas/x402-activities/blob/main/skill.md",
+  "openapi": "https://github.com/nirholas/x402-activities/blob/main/openapi.json",
+  "payment": {
+    "note": "Pay in USDC on Base or Solana — your client picks the rail.",
+    "facilitator": "https://x402.org/facilitator",
+    "rails": [
+      {
+        "rail": "evm",
+        "network": "base-sepolia",
+        "asset": "USDC",
+        "payTo": "0x40252CFDF8B20Ed757D61ff157719F33Ec332402",
+        "decimals": 6
+      },
+      {
+        "rail": "solana",
+        "network": "solana",
+        "asset": "USDC",
+        "payTo": "WwwuGbqHrwF5RG89KhUbmRWEvjnRH9k5kVM5p7T3WwW",
+        "decimals": 6
+      }
+    ]
+  },
   "resources": [
     {
       "resource": "GET /search",
-      "description": "Search tours & activities around a coordinate. Params: lat (required), lon (required), radius km (optional, default 1, max 20). Returns activities with names, descriptions, prices, ratings, and booking links.",
+      "description": "Search bookable tours and activities around a coordinate",
       "price": "$0.003",
       "network": "base-sepolia",
+      "networks": [
+        "base-sepolia",
+        "solana"
+      ],
       "asset": "USDC",
+      "accepts": [
+        {
+          "scheme": "exact",
+          "network": "base-sepolia",
+          "asset": "USDC",
+          "payTo": "0x40252CFDF8B20Ed757D61ff157719F33Ec332402",
+          "maxAmountRequired": "3000",
+          "mimeType": "application/json"
+        },
+        {
+          "scheme": "exact",
+          "network": "solana",
+          "asset": "USDC",
+          "payTo": "WwwuGbqHrwF5RG89KhUbmRWEvjnRH9k5kVM5p7T3WwW",
+          "maxAmountRequired": "3000",
+          "mimeType": "application/json"
+        }
+      ],
       "outputSchema": {
         "type": "object",
+        "required": [
+          "source",
+          "query",
+          "count",
+          "activities",
+          "retrievedAt"
+        ],
         "properties": {
-          "source": { "type": "string", "enum": ["amadeus", "fixture"] },
+          "source": {
+            "type": "string",
+            "enum": [
+              "amadeus",
+              "fixture"
+            ],
+            "description": "`amadeus` = live API; `fixture` = deterministic demo data."
+          },
           "query": {
             "type": "object",
             "properties": {
-              "latitude": { "type": "number" },
-              "longitude": { "type": "number" },
-              "radiusKm": { "type": "number" }
+              "latitude": {
+                "type": "number"
+              },
+              "longitude": {
+                "type": "number"
+              },
+              "radiusKm": {
+                "type": "number"
+              }
             }
           },
-          "count": { "type": "integer" },
+          "count": {
+            "type": "integer"
+          },
+          "retrievedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
           "activities": {
             "type": "array",
             "items": {
               "type": "object",
+              "required": [
+                "id",
+                "name"
+              ],
               "properties": {
-                "id": { "type": "string" },
-                "name": { "type": "string" },
-                "shortDescription": { "type": "string" },
-                "latitude": { "type": "number" },
-                "longitude": { "type": "number" },
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "shortDescription": {
+                  "type": "string"
+                },
+                "latitude": {
+                  "type": "number"
+                },
+                "longitude": {
+                  "type": "number"
+                },
                 "price": {
-                  "type": ["object", "null"],
+                  "type": [
+                    "object",
+                    "null"
+                  ],
                   "properties": {
-                    "amount": { "type": "string" },
-                    "currencyCode": { "type": "string" }
+                    "amount": {
+                      "type": "string"
+                    },
+                    "currencyCode": {
+                      "type": "string"
+                    }
                   }
                 },
-                "rating": { "type": ["number", "null"] },
-                "pictures": { "type": "array", "items": { "type": "string" } },
-                "bookingLink": { "type": ["string", "null"] },
-                "minimumDuration": { "type": ["string", "null"] }
+                "rating": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "pictures": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "uri"
+                  }
+                },
+                "bookingLink": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uri"
+                },
+                "minimumDuration": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "ISO 8601 duration, e.g. PT2H30M."
+                }
               }
             }
-          },
-          "retrievedAt": { "type": "string", "format": "date-time" }
+          }
         }
       }
     }

@@ -1,87 +1,144 @@
-# x402-activities
+# x402-activities — agent skill
 
-Pay-per-query tours & activities search for AI agents. Give it a coordinate, pay $0.003 in USDC via the x402 protocol, and get back a JSON list of bookable experiences nearby — names, descriptions, prices, ratings, durations, and booking links. Backed by the Amadeus Tours & Activities API when credentials are configured; otherwise returns clearly-labeled deterministic fixtures so the endpoint always works. No account, no API key, no subscription — each request pays for itself.
+Find bookable tours, activities, and experiences near a coordinate. You send a
+latitude/longitude and a radius; you get back a list of real, bookable
+activities with prices, ratings, durations, and booking links. Backed by the
+Amadeus Tours & Activities API when credentials are configured, and by
+deterministic fixtures otherwise (always labelled in the `source` field).
 
-**Base URL**: `https://YOUR-DEPLOYMENT.example.com` (replace with the deployment you were given; local default `http://localhost:4021`)
+**Base URL:** `{BASE_URL}` (local default `http://localhost:4021`)
 
-**Machine-readable manifest**: `GET /.well-known/x402` (free)
-
-## Endpoints
-
-### GET /search — $0.003
-
-Search tours & activities around a point.
-
-Query parameters:
-
-| Param | Type | Required | Description |
-|-------|------|----------|-------------|
-| `lat` | number | yes | Latitude, -90..90 |
-| `lon` | number | yes | Longitude, -180..180 |
-| `radius` | number | no | Search radius in km (default 1, max 20) |
-
-Response `200` (`application/json`):
-
-```json
-{
-  "source": "amadeus",
-  "query": { "latitude": 41.3851, "longitude": 2.1734, "radiusKm": 2 },
-  "count": 2,
-  "activities": [
-    {
-      "id": "23642",
-      "name": "Sagrada Familia guided tour",
-      "shortDescription": "Skip-the-line guided visit with a licensed guide.",
-      "latitude": 41.4036,
-      "longitude": 2.1744,
-      "price": { "amount": "54.00", "currencyCode": "EUR" },
-      "rating": 4.6,
-      "pictures": ["https://..."],
-      "bookingLink": "https://...",
-      "minimumDuration": "PT1H30M"
-    }
-  ],
-  "retrievedAt": "2026-01-01T12:00:00.000Z"
-}
-```
-
-`source` is `"amadeus"` for live data or `"fixture"` for deterministic sample data (server has no Amadeus credentials).
-
-### GET / — free
-
-Service metadata: routes, prices, payment details, backend mode.
-
-### GET /health — free
-
-`{ "status": "ok" }` liveness probe.
+Every paid call returns the purchased artifact **in the 200 response body**.
+There is nothing to poll and nothing to collect later.
 
 ## Payment
 
-- **Protocol**: [x402](https://x402.org) (HTTP 402 Payment Required)
-- **Network**: `base-sepolia` (testnet default; deployments may use `base` mainnet)
-- **Asset**: USDC
-- **Facilitator**: `https://x402.org/facilitator`
-- **How to pay**: call a paid route; on `402` the response body contains `accepts` payment requirements. Sign an EIP-3009 USDC authorization for the listed `payTo`/amount and retry with the `X-PAYMENT` header. Any x402 client works — e.g. `x402-fetch`:
+This service speaks **x402** (HTTP 402 Payment Required, <https://x402.org>).
+
+**Pay in USDC on Base or Solana — your client picks the rail.**
+
+| Rail | Network | Asset | payTo |
+|------|---------|-------|-------|
+| EVM | `base-sepolia` (`base` on mainnet) | USDC | `0x40252CFDF8B20Ed757D61ff157719F33Ec332402` |
+| Solana | `solana` (`solana-devnet` on devnet) | USDC | `WwwuGbqHrwF5RG89KhUbmRWEvjnRH9k5kVM5p7T3WwW` |
+
+Facilitator: `https://x402.org/facilitator` (verifies and settles both rails).
+
+Flow:
+
+1. Call the endpoint with no `X-PAYMENT` header. You get **402** with an
+   `accepts` array holding **both** rails.
+2. Pick a rail, sign the payment, and put the base64 payload in `X-PAYMENT`.
+3. Repeat the request. You get **200** with the artifact, and a settlement
+   receipt in the `X-PAYMENT-RESPONSE` header (base64 JSON:
+   `{ success, rail, network, transaction, payer, amount, asset }`).
+
+Use `x402-fetch` (EVM), a Solana x402 client, or any x402-aware HTTP client —
+the wire format is the standard one.
 
 ```ts
 import { wrapFetchWithPayment, createSigner } from "x402-fetch";
 const signer = await createSigner("base-sepolia", process.env.PRIVATE_KEY!);
-const payFetch = wrapFetchWithPayment(fetch, signer);
-const res = await payFetch("http://localhost:4021/search?lat=41.3851&lon=2.1734&radius=2");
-const activities = await res.json(); // the purchased artifact, in-response
+const pay = wrapFetchWithPayment(fetch, signer);
+const res = await pay("{BASE_URL}/search?lat=41.3851&lon=2.1734&radius=2");
+const artifact = await res.json();
 ```
 
-The settlement receipt is returned in the `X-PAYMENT-RESPONSE` response header.
+## Endpoints
+
+### `GET /search` — $0.003
+
+Search bookable tours and activities around a coordinate
+
+| Param | In | Required | Type | Description |
+|-------|----|----------|------|-------------|
+| `lat` | query | yes | number | Latitude, -90…90. |
+| `lon` | query | yes | number | Longitude, -180…180. |
+| `radius` | query | no | number | Search radius in kilometres, 0…20. Default 1. |
+
+**Returns** (`200 application/json`) — Activities near the coordinate: name, description, geo, price, rating, booking link, duration
+
+```json
+{
+  "source": "fixture",
+  "query": {
+    "latitude": 41.3851,
+    "longitude": 2.1734,
+    "radiusKm": 2
+  },
+  "count": 5,
+  "activities": [
+    {
+      "id": "FIX-1HQ4KZ-1",
+      "name": "Food tasting near 41.39, 2.17 #1",
+      "shortDescription": "Progressive tasting across five family-run spots: street food, market stalls, and a hidden wine bar.",
+      "latitude": 41.386204,
+      "longitude": 2.17198,
+      "price": {
+        "amount": "55.00",
+        "currencyCode": "EUR"
+      },
+      "rating": 4.6,
+      "pictures": [],
+      "bookingLink": "https://example.com/book/FIX-1HQ4KZ-1",
+      "minimumDuration": "PT3H"
+    },
+    {
+      "id": "FIX-1HQ4KZ-2",
+      "name": "Sunset cruise near 41.39, 2.17 #2",
+      "shortDescription": "Golden-hour boat cruise with onboard commentary and a welcome drink.",
+      "latitude": 41.383911,
+      "longitude": 2.176042,
+      "price": {
+        "amount": "40.00",
+        "currencyCode": "EUR"
+      },
+      "rating": 4.2,
+      "pictures": [],
+      "bookingLink": "https://example.com/book/FIX-1HQ4KZ-2",
+      "minimumDuration": "PT2H"
+    }
+  ],
+  "retrievedAt": "2026-08-07T02:14:33.512Z"
+}
+```
+
+
+## Free endpoints
+
+- `GET /` — Service metadata, live prices, active payment rails, backend status
+- `GET /health` — Liveness probe
+- `GET /.well-known/x402` — Machine-readable discovery manifest
 
 ## Error codes
 
-| Status | Body `error` | Meaning |
-|--------|--------------|---------|
-| 400 | `invalid_lat` / `invalid_lon` / `invalid_radius` | Bad query parameter |
-| 402 | — | Payment required; body lists `accepts` payment requirements |
-| 502 | `upstream_error` | Amadeus upstream failed; retry later |
+| HTTP | `error` | Meaning |
+|------|---------|---------|
+| 400 | `invalid_lat` | `lat` missing or outside -90…90. |
+| 400 | `invalid_lon` | `lon` missing or outside -180…180. |
+| 400 | `invalid_radius` | `radius` outside 0…20 km. |
+| 502 | `upstream_error` | Amadeus rejected the request or timed out. |
+| 402 | — | Payment required or rejected. Body carries `accepts` (both rails) and an `error` reason. |
+| 500 | `no_payment_rail_configured` | Server has neither a valid EVM nor Solana payTo. |
+
+## Data source
+
+Live [Amadeus Tours & Activities](https://developers.amadeus.com) data when
+`AMADEUS_CLIENT_ID` and `AMADEUS_CLIENT_SECRET` are set (`source: "amadeus"`).
+Without them the service returns deterministic fixtures (`source: "fixture"`) —
+the same query always yields the same activities, so the demo runs with no paid
+credentials. Always check the `source` field before treating results as real
+inventory.
 
 ## Discovery
 
-- This file (`skill.md`) at the repo root is the agent-facing skill description.
-- `GET /.well-known/x402` returns the indexable JSON manifest (x402scan.com, x402 Bazaar, agentic.market compatible).
+Machine-readable manifest: **`GET /.well-known/x402`**
+(also at <https://github.com/nirholas/x402-activities/blob/main/public/.well-known/x402>).
+Indexed by [x402scan.com](https://x402scan.com), the x402 Bazaar, and
+[agentic.market](https://agentic.market).
+
+OpenAPI 3.1: [`openapi.json`](https://github.com/nirholas/x402-activities/blob/main/openapi.json)
+
+## Contact
+
+nichxbt@gmail.com · <https://github.com/nirholas/x402-activities>

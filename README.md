@@ -2,10 +2,13 @@
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![x402](https://img.shields.io/badge/payments-x402-0052ff.svg)](https://x402.org)
+[![USDC on Base](https://img.shields.io/badge/USDC-Base-0052ff.svg)](https://base.org)
+[![USDC on Solana](https://img.shields.io/badge/USDC-Solana-14f195.svg)](https://solana.com)
 
 **Tours and activities search via Amadeus — agents find bookable experiences by
-location.** One HTTP call, $0.003 in USDC, and the full activity list comes back
-in the response body: names, prices, ratings, durations, booking links.
+location.** One HTTP call, $0.003 in USDC on Base *or* Solana, and the full
+activity list comes back in the response body: names, prices, ratings,
+durations, booking links.
 
 Docs site: **https://nirholas.github.io/x402-activities/**
 
@@ -14,9 +17,10 @@ Docs site: **https://nirholas.github.io/x402-activities/**
 Activity search APIs normally mean developer accounts, API keys, and quota
 tiers — hostile territory for an autonomous agent that just wants one answer.
 With x402 the route itself quotes its price in the 402 response, the agent pays
-$0.003 in USDC per query, and there is nothing to sign up for, leak, or rotate.
-Pay-per-request also matches how agents actually consume search: sporadically,
-across many services.
+$0.003 in USDC per query on whichever chain it holds funds on, and there is
+nothing to sign up for, leak, or rotate. Pay-per-request also matches how agents
+actually consume search: sporadically, across many services, with no way to
+predict a monthly tier in advance.
 
 ## Quickstart
 
@@ -24,10 +28,18 @@ across many services.
 git clone https://github.com/nirholas/x402-activities
 cd x402-activities
 npm install
-PAY_TO_ADDRESS=0xYourAddress npm run dev
+npm run dev            # http://localhost:4021 — no configuration needed
 ```
 
-Then, from an agent (wallet funded with base-sepolia USDC — https://faucet.circle.com):
+See the price with no wallet at all:
+
+```bash
+curl -s "http://localhost:4021/search?lat=41.3851&lon=2.1734&radius=2" | jq
+# 402 + accepts: [ USDC on Base, USDC on Solana ]
+```
+
+Then buy it, from an agent (wallet funded with Base Sepolia USDC —
+https://faucet.circle.com):
 
 ```bash
 PRIVATE_KEY=0xYourTestKey npm run client
@@ -37,24 +49,35 @@ PRIVATE_KEY=0xYourTestKey npm run client
 
 | Route | Price | What you get back |
 |-------|-------|-------------------|
-| `GET /search?lat&lon&radius` | **$0.003** | Activities near the coordinate: name, description, geo, price, rating, booking link, duration |
-| `GET /` | free | Service metadata + prices |
-| `GET /health` | free | Liveness |
+| `GET /search` | **$0.003** | Activities near the coordinate: name, description, geo, price, rating, booking link, duration |
+| `GET /` | free | Service metadata, live prices, active payment rails, backend status |
+| `GET /health` | free | Liveness probe |
 | `GET /.well-known/x402` | free | Machine-readable discovery manifest |
 
 Full reference: [docs/api.md](docs/api.md) · [openapi.json](openapi.json)
 
 ## How x402 works
 
-1. **402** — `GET /search` without payment returns HTTP 402 plus `accepts`:
-   the exact price ($0.003 → `3000` USDC base units), asset, and `payTo`.
-2. **Sign** — the client signs an EIP-3009 USDC transfer authorization for that
-   amount (no gas needed from the payer).
-3. **Settle** — the server passes it to the facilitator
-   (`https://x402.org/facilitator` on testnet), which verifies and settles
-   on-chain.
+**Pay in USDC on Base or Solana — your client picks the rail.**
+
+1. **402** — the route, called without payment, replies HTTP 402 with an
+   `accepts` array holding **both** rails: exact price
+   ($0.003 → `3000` USDC base units), asset, and `payTo`.
+2. **Sign** — on Base, the client signs an EIP-3009 USDC authorization (no gas
+   from the payer). On Solana, it signs an SPL `transferChecked` whose fee payer
+   is the facilitator's sponsor account (so the buyer needs USDC only, no SOL).
+3. **Settle** — the server hands the payload to the facilitator
+   (`https://x402.org/facilitator`), which verifies and settles on the chosen chain.
 4. **200** — the same request returns the artifact in the body, with the
    settlement receipt in the `X-PAYMENT-RESPONSE` header.
+
+| Rail | Network | Asset | payTo |
+|------|---------|-------|-------|
+| EVM | `base-sepolia` (`base` on mainnet) | USDC | `0x40252CFDF8B20Ed757D61ff157719F33Ec332402` |
+| Solana | `solana` (`solana-devnet` on devnet) | USDC | `WwwuGbqHrwF5RG89KhUbmRWEvjnRH9k5kVM5p7T3WwW` |
+
+Those are the suite's public receive addresses and the server's defaults. Set
+`PAY_TO_ADDRESS` / `SOLANA_PAY_TO_ADDRESS` to be paid yourself.
 
 Walkthroughs: [examples/curl.md](examples/curl.md) ·
 [examples/agent-client.ts](examples/agent-client.ts) ·
@@ -64,20 +87,20 @@ Walkthroughs: [examples/curl.md](examples/curl.md) ·
 
 | Env | Effect |
 |-----|--------|
-| `AMADEUS_CLIENT_ID` + `AMADEUS_CLIENT_SECRET` | Live [Amadeus Tours & Activities](https://developers.amadeus.com) data (`source: "amadeus"`). Free self-service keys; default base URL is the Amadeus **test** environment (`AMADEUS_BASE_URL` to change). |
-| *(unset)* | Deterministic fixtures, honestly labeled `source: "fixture"` in every response. Same query → same results. The demo never requires a key. |
+| `AMADEUS_CLIENT_ID` + `AMADEUS_CLIENT_SECRET` | Live [Amadeus Tours & Activities](https://developers.amadeus.com) data (`source: "amadeus"`). Free self-service keys; defaults to the Amadeus **test** environment — set `AMADEUS_BASE_URL=https://api.amadeus.com` for production. |
+| *(unset)* | Deterministic fixtures, honestly labelled `source: "fixture"` in every response. Same query → same results. The demo never requires a key. |
 
 All variables: [.env.example](.env.example)
 
 ## For AI agents
 
 - **[skill.md](skill.md)** — agent-facing skill file: endpoints, prices,
-  schemas, payment instructions. Point your agent at it.
-- **`GET /.well-known/x402`** — discovery manifest indexable by
-  [x402scan.com](https://x402scan.com), the x402 Bazaar, and
-  [agentic.market](https://agentic.market).
-- **MCP** — [examples/mcp-tool.md](examples/mcp-tool.md) shows how to expose
-  `/search` as a Claude MCP tool (with per-call spend caps), including a
+  schemas, both payment rails. Point your agent at it.
+- **`GET /.well-known/x402`** — discovery manifest listing every resource with
+  both networks. Indexable by [x402scan.com](https://x402scan.com), the x402
+  Bazaar, and [agentic.market](https://agentic.market).
+- **MCP** — [examples/mcp-tool.md](examples/mcp-tool.md) exposes these routes as
+  Claude MCP tools, with per-wallet spend caps and a
   `claude_desktop_config.json` example.
 - More: [docs/agents.md](docs/agents.md)
 
@@ -85,6 +108,11 @@ All variables: [.env.example](.env.example)
 
 - Landing: https://nirholas.github.io/x402-activities/
 - [Tutorial](docs/tutorial.md) · [API reference](docs/api.md) · [For AI agents](docs/agents.md)
+
+## Support
+
+Questions, bugs, or a listing request: **nichxbt@gmail.com** ·
+[open an issue](https://github.com/nirholas/x402-activities/issues)
 
 ## License
 

@@ -1,60 +1,118 @@
 # For AI agents — x402-activities
 
-This service is built to be consumed by autonomous agents: machine-readable
-discovery, per-request USDC payment, and the purchased artifact always in the
-response body.
+`x402-activities` turns "what can I actually do near here?" into a single paid
+HTTP call. No developer account, no API key rotation, no quota tier — an agent
+pays $0.003 per query in USDC and gets the bookable list back in the same
+response.
 
-## Discovery
+## 1. Discover
 
-Two artifacts describe this service to agents:
+Two machine-readable descriptions, both free to fetch:
 
-1. **[`skill.md`](https://github.com/nirholas/x402-activities/blob/main/skill.md)**
-   (repo root) — the agent-facing skill file: endpoints, prices, parameter and
-   response schemas, payment instructions, error codes. Load it into your
-   agent's context and it knows how to use the service.
-2. **`GET /.well-known/x402`** (on the running server, free) — JSON manifest in
-   the x402 discovery format: every paid resource with `price`, `network`,
-   `asset`, and `outputSchema`. Indexers like x402scan.com, the x402 Bazaar,
-   and agentic.market can crawl this.
+| Where | What it is |
+|-------|-----------|
+| `GET /.well-known/x402` | The x402 discovery manifest: every resource, its price, its output schema, and both accepted payment rails. |
+| [`skill.md`](https://github.com/nirholas/x402-activities/blob/main/skill.md) | The agent-facing skill file: prose an LLM can read directly to learn the endpoints, parameters, and payment flow. |
+| [`openapi.json`](https://github.com/nirholas/x402-activities/blob/main/openapi.json) | OpenAPI 3.1, including the 402 `PaymentRequirements` schema. |
 
-## Paying
-
-Any x402 client works. With `x402-fetch`:
-
-```ts
-import { wrapFetchWithPayment, createSigner } from "x402-fetch";
-
-const signer = await createSigner("base-sepolia", process.env.PRIVATE_KEY!);
-const payFetch = wrapFetchWithPayment(fetch, signer);
-const res = await payFetch(`${BASE}/search?lat=41.3851&lon=2.1734`);
-const artifact = await res.json();
+```bash
+curl -s http://localhost:4021/.well-known/x402 | jq '.resources[] | {resource, price, networks}'
 ```
 
-The client handles the 402 → sign → retry loop. The `X-PAYMENT-RESPONSE`
-header on the 200 carries the settlement receipt (decode with
-`decodeXPaymentResponse`).
+```json
+{
+  "resource": "GET /search",
+  "price": "$0.003",
+  "networks": ["base-sepolia", "solana"]
+}
+```
 
-## What you get back
+## 2. Pay — on either rail
 
-`GET /search` returns the full activity list *in the paid response* — there is
-no follow-up call, webhook, or account. Check the `source` field: `"amadeus"`
-is live inventory; `"fixture"` is deterministic demo data (the server has no
-Amadeus credentials configured).
+**Pay in USDC on Base or Solana; your client picks the rail.** An unpaid request
+returns 402 with an `accepts` array containing one entry per rail:
 
-## MCP integration
+```jsonc
+{
+  "x402Version": 1,
+  "accepts": [
+    {
+      "scheme": "exact",
+      "network": "base-sepolia",          // "base" on mainnet
+      "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",   // USDC
+      "payTo": "0x40252CFDF8B20Ed757D61ff157719F33Ec332402",
+      "maxAmountRequired": "3000",             // 6 decimals
+      "extra": { "name": "USDC", "version": "2" }   // EIP-712 domain
+    },
+    {
+      "scheme": "exact",
+      "network": "solana",                 // "solana-devnet" on devnet
+      "asset": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  // USDC mint
+      "payTo": "WwwuGbqHrwF5RG89KhUbmRWEvjnRH9k5kVM5p7T3WwW",
+      "maxAmountRequired": "3000",
+      "extra": { "feePayer": "<facilitator sponsor>" }  // pays the SOL fee
+    }
+  ]
+}
+```
 
-See [`examples/mcp-tool.md`](https://github.com/nirholas/x402-activities/blob/main/examples/mcp-tool.md)
-for a complete MCP server exposing `search_activities` to Claude, including a
-`claude_desktop_config.json` snippet and a note on per-call spending caps.
+**EVM path.** Sign an EIP-3009 `transferWithAuthorization`. Entirely
+client-side; no gas from the payer. `x402-fetch` does it in two lines:
 
-## Listing this service
+```ts
+import { createSigner, wrapFetchWithPayment } from "x402-fetch";
+const payFetch = wrapFetchWithPayment(fetch, await createSigner("base-sepolia", KEY));
+const artifact = await (await payFetch("${BASE}/search?lat=41.3851&lon=2.1734&radius=2")).json();
+```
 
-If you deploy your own instance and want agents to find it:
+**Solana path.** Build an SPL `transferChecked` to `payTo` for
+`maxAmountRequired`, using `extra.feePayer` as the transaction fee payer, and
+sign it. The buyer needs USDC only — the facilitator sponsors the SOL fee.
+Base64-encode `{ x402Version: 1, scheme: "exact", network, payload: { transaction } }`
+into `X-PAYMENT`.
 
-- **x402scan.com** — crawls `/.well-known/x402`; submit your base URL.
-- **x402 Bazaar** — the discovery layer around the x402 facilitator; make your
-  routes `discoverable` and register the service endpoint.
-- **agentic.market** — lists agent-payable services; the same manifest applies.
+Either way the server verifies and settles through the facilitator at
+`https://x402.org/facilitator` and returns the artifact.
 
-Keep `skill.md` and `/.well-known/x402` in sync with your actual routes — they
-are the contract agents rely on.
+## 3. Read the receipt
+
+Successful responses carry `X-PAYMENT-RESPONSE` — base64 JSON:
+
+```json
+{ "success": true, "rail": "solana", "network": "solana",
+  "transaction": "<signature>", "payer": "<buyer>",
+  "amount": "3000", "asset": "USDC" }
+```
+
+Log it: it is your proof of spend, on whichever chain you used.
+
+## 4. What you get back
+
+- `GET /search` (**$0.003**) — Activities near the coordinate: name, description, geo, price, rating, booking link, duration
+
+Nothing is deferred. The artifact is in the body of the 200 you paid for.
+
+## 5. MCP integration
+
+[`examples/mcp-tool.md`](https://github.com/nirholas/x402-activities/blob/main/examples/mcp-tool.md)
+has a complete MCP server that exposes these routes as Claude tools, including a
+spend cap so a runaway loop cannot drain the wallet.
+
+## 6. Listing an instance
+
+Deployed your own? Make it discoverable:
+
+- **[x402scan.com](https://x402scan.com)** — crawls `/.well-known/x402`. Submit
+  your base URL; keep the manifest at that exact path.
+- **x402 Bazaar** — the facilitator's resource directory. Resources are listed
+  from the `discoverable` flag in the 402 `outputSchema.input` (set by default
+  here).
+- **[agentic.market](https://agentic.market)** — agent-facing service catalog;
+  submit the base URL plus a link to `skill.md`.
+
+Keep `/.well-known/x402`, `skill.md`, and `openapi.json` consistent when you
+change prices — indexers read all three.
+
+## Questions
+
+nichxbt@gmail.com · <https://github.com/nirholas/x402-activities>

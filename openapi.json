@@ -3,37 +3,329 @@
   "info": {
     "title": "x402-activities",
     "version": "0.1.0",
-    "description": "Tours and activities search via Amadeus — agents find bookable experiences by location. Paid routes use the x402 protocol (HTTP 402, USDC on Base).",
-    "license": { "name": "Apache-2.0", "identifier": "Apache-2.0" }
+    "description": "Tours and activities search via Amadeus — agents find bookable experiences by location\n\nEvery paid route returns the purchased artifact in the 200 response body. Pay in USDC on Base or Solana — your client picks the rail.",
+    "license": {
+      "name": "Apache-2.0",
+      "identifier": "Apache-2.0"
+    },
+    "contact": {
+      "name": "nirholas",
+      "email": "nichxbt@gmail.com",
+      "url": "https://github.com/nirholas/x402-activities"
+    }
   },
-  "servers": [{ "url": "http://localhost:4021" }],
+  "servers": [
+    {
+      "url": "http://localhost:4021",
+      "description": "Local development"
+    },
+    {
+      "url": "{baseUrl}",
+      "description": "Deployed instance",
+      "variables": {
+        "baseUrl": {
+          "default": "http://localhost:4021"
+        }
+      }
+    }
+  ],
+  "externalDocs": {
+    "description": "Docs site",
+    "url": "https://nirholas.github.io/x402-activities/"
+  },
+  "tags": [
+    {
+      "name": "paid",
+      "description": "x402-paid routes. Artifact returned in the 200 body."
+    },
+    {
+      "name": "free",
+      "description": "Unpaid metadata routes."
+    }
+  ],
   "paths": {
-    "/": {
+    "/search": {
       "get": {
-        "operationId": "getServiceInfo",
-        "summary": "Service metadata (free)",
+        "operationId": "searchActivities",
+        "summary": "Search bookable tours and activities around a coordinate ($0.003)",
+        "description": "Search bookable tours and activities around a coordinate\n\nPaid route — $0.003 in USDC. Pay on Base (EVM) or Solana; the 402 challenge lists both rails.",
+        "tags": [
+          "paid"
+        ],
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "description": "Latitude, -90…90.",
+            "schema": {
+              "type": "number"
+            },
+            "example": 41.3851
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": true,
+            "description": "Longitude, -180…180.",
+            "schema": {
+              "type": "number"
+            },
+            "example": 2.1734
+          },
+          {
+            "name": "radius",
+            "in": "query",
+            "required": false,
+            "description": "Search radius in kilometres, 0…20. Default 1.",
+            "schema": {
+              "type": "number"
+            },
+            "example": 2
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Service info with routes and payment details",
-            "content": { "application/json": { "schema": { "type": "object" } } }
+            "description": "Activities near the coordinate: name, description, geo, price, rating, booking link, duration",
+            "headers": {
+              "X-PAYMENT-RESPONSE": {
+                "description": "Base64 JSON settlement receipt.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "source",
+                    "query",
+                    "count",
+                    "activities",
+                    "retrievedAt"
+                  ],
+                  "properties": {
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "amadeus",
+                        "fixture"
+                      ],
+                      "description": "`amadeus` = live API; `fixture` = deterministic demo data."
+                    },
+                    "query": {
+                      "type": "object",
+                      "properties": {
+                        "latitude": {
+                          "type": "number"
+                        },
+                        "longitude": {
+                          "type": "number"
+                        },
+                        "radiusKm": {
+                          "type": "number"
+                        }
+                      }
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "retrievedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "activities": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "shortDescription": {
+                            "type": "string"
+                          },
+                          "latitude": {
+                            "type": "number"
+                          },
+                          "longitude": {
+                            "type": "number"
+                          },
+                          "price": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "amount": {
+                                "type": "string"
+                              },
+                              "currencyCode": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "rating": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "pictures": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "format": "uri"
+                            }
+                          },
+                          "bookingLink": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uri"
+                          },
+                          "minimumDuration": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "ISO 8601 duration, e.g. PT2H30M."
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "source": "fixture",
+                  "query": {
+                    "latitude": 41.3851,
+                    "longitude": 2.1734,
+                    "radiusKm": 2
+                  },
+                  "count": 5,
+                  "activities": [
+                    {
+                      "id": "FIX-1HQ4KZ-1",
+                      "name": "Food tasting near 41.39, 2.17 #1",
+                      "shortDescription": "Progressive tasting across five family-run spots: street food, market stalls, and a hidden wine bar.",
+                      "latitude": 41.386204,
+                      "longitude": 2.17198,
+                      "price": {
+                        "amount": "55.00",
+                        "currencyCode": "EUR"
+                      },
+                      "rating": 4.6,
+                      "pictures": [],
+                      "bookingLink": "https://example.com/book/FIX-1HQ4KZ-1",
+                      "minimumDuration": "PT3H"
+                    },
+                    {
+                      "id": "FIX-1HQ4KZ-2",
+                      "name": "Sunset cruise near 41.39, 2.17 #2",
+                      "shortDescription": "Golden-hour boat cruise with onboard commentary and a welcome drink.",
+                      "latitude": 41.383911,
+                      "longitude": 2.176042,
+                      "price": {
+                        "amount": "40.00",
+                        "currencyCode": "EUR"
+                      },
+                      "rating": 4.2,
+                      "pictures": [],
+                      "bookingLink": "https://example.com/book/FIX-1HQ4KZ-2",
+                      "minimumDuration": "PT2H"
+                    }
+                  ],
+                  "retrievedAt": "2026-08-07T02:14:33.512Z"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment required (or payment rejected). The body lists both accepted rails.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentRequired"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream data source failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "operationId": "serviceInfo",
+        "summary": "Service metadata, live prices, and active payment rails (free)",
+        "tags": [
+          "free"
+        ],
+        "responses": {
+          "200": {
+            "description": "Service metadata.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
     },
     "/health": {
       "get": {
-        "operationId": "getHealth",
+        "operationId": "health",
         "summary": "Liveness probe (free)",
+        "tags": [
+          "free"
+        ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "OK.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "status": { "type": "string" },
-                    "uptime": { "type": "number" }
+                    "status": {
+                      "type": "string"
+                    },
+                    "uptime": {
+                      "type": "number"
+                    }
                   }
                 }
               }
@@ -44,78 +336,19 @@
     },
     "/.well-known/x402": {
       "get": {
-        "operationId": "getX402Manifest",
+        "operationId": "discoveryManifest",
         "summary": "x402 discovery manifest (free)",
-        "responses": {
-          "200": {
-            "description": "Machine-readable list of paid resources",
-            "content": { "application/json": { "schema": { "type": "object" } } }
-          }
-        }
-      }
-    },
-    "/search": {
-      "get": {
-        "operationId": "searchActivities",
-        "summary": "Search tours & activities around a coordinate ($0.003 via x402)",
-        "parameters": [
-          {
-            "name": "lat",
-            "in": "query",
-            "required": true,
-            "schema": { "type": "number", "minimum": -90, "maximum": 90 },
-            "description": "Latitude"
-          },
-          {
-            "name": "lon",
-            "in": "query",
-            "required": true,
-            "schema": { "type": "number", "minimum": -180, "maximum": 180 },
-            "description": "Longitude"
-          },
-          {
-            "name": "radius",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "number",
-              "exclusiveMinimum": 0,
-              "maximum": 20,
-              "default": 1
-            },
-            "description": "Search radius in km"
-          }
+        "tags": [
+          "free"
         ],
         "responses": {
           "200": {
-            "description": "Activities near the coordinate (the purchased artifact)",
+            "description": "Manifest.",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SearchResult" }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid parameters",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Error" }
-              }
-            }
-          },
-          "402": {
-            "description": "Payment required — pay via x402 and retry with X-PAYMENT header",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/PaymentRequirements" }
-              }
-            }
-          },
-          "502": {
-            "description": "Upstream (Amadeus) error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Error" }
+                "schema": {
+                  "type": "object"
+                }
               }
             }
           }
@@ -127,77 +360,108 @@
     "schemas": {
       "Error": {
         "type": "object",
+        "required": [
+          "error"
+        ],
         "properties": {
-          "error": { "type": "string" },
-          "message": { "type": "string" }
-        },
-        "required": ["error", "message"]
-      },
-      "PaymentRequirements": {
-        "type": "object",
-        "description": "x402 payment requirements returned with HTTP 402",
-        "properties": {
-          "x402Version": { "type": "integer" },
-          "error": { "type": "string" },
-          "accepts": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "scheme": { "type": "string", "example": "exact" },
-                "network": { "type": "string", "example": "base-sepolia" },
-                "maxAmountRequired": { "type": "string" },
-                "resource": { "type": "string" },
-                "description": { "type": "string" },
-                "mimeType": { "type": "string" },
-                "payTo": { "type": "string" },
-                "maxTimeoutSeconds": { "type": "integer" },
-                "asset": { "type": "string" },
-                "extra": { "type": "object" }
-              }
-            }
+          "error": {
+            "type": "string",
+            "description": "Machine-readable error code."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable description."
           }
         }
       },
-      "Activity": {
+      "PaymentRequirements": {
         "type": "object",
+        "description": "One accepted payment rail, per the x402 specification.",
+        "required": [
+          "scheme",
+          "network",
+          "maxAmountRequired",
+          "resource",
+          "payTo",
+          "asset"
+        ],
         "properties": {
-          "id": { "type": "string" },
-          "name": { "type": "string" },
-          "shortDescription": { "type": "string" },
-          "latitude": { "type": "number" },
-          "longitude": { "type": "number" },
-          "price": {
-            "type": ["object", "null"],
-            "properties": {
-              "amount": { "type": "string" },
-              "currencyCode": { "type": "string" }
-            }
+          "scheme": {
+            "type": "string",
+            "enum": [
+              "exact"
+            ]
           },
-          "rating": { "type": ["number", "null"] },
-          "pictures": { "type": "array", "items": { "type": "string" } },
-          "bookingLink": { "type": ["string", "null"] },
-          "minimumDuration": { "type": ["string", "null"] }
+          "network": {
+            "type": "string",
+            "enum": [
+              "base-sepolia",
+              "base",
+              "solana",
+              "solana-devnet"
+            ],
+            "description": "EVM or Solana network this rail settles on."
+          },
+          "maxAmountRequired": {
+            "type": "string",
+            "description": "Price in USDC base units (6 decimals)."
+          },
+          "resource": {
+            "type": "string",
+            "format": "uri"
+          },
+          "description": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "payTo": {
+            "type": "string",
+            "description": "Receive address (0x… for EVM, base58 for Solana)."
+          },
+          "maxTimeoutSeconds": {
+            "type": "integer"
+          },
+          "asset": {
+            "type": "string",
+            "description": "USDC contract address or SPL mint."
+          },
+          "outputSchema": {
+            "type": "object"
+          },
+          "extra": {
+            "type": "object",
+            "description": "EVM: EIP-712 domain (`name`, `version`). Solana: `feePayer`, the sponsor that pays the SOL network fee."
+          }
         }
       },
-      "SearchResult": {
+      "PaymentRequired": {
         "type": "object",
+        "required": [
+          "x402Version",
+          "accepts"
+        ],
         "properties": {
-          "source": { "type": "string", "enum": ["amadeus", "fixture"] },
-          "query": {
-            "type": "object",
-            "properties": {
-              "latitude": { "type": "number" },
-              "longitude": { "type": "number" },
-              "radiusKm": { "type": "number" }
-            }
+          "x402Version": {
+            "type": "integer",
+            "enum": [
+              1
+            ]
           },
-          "count": { "type": "integer" },
-          "activities": {
+          "error": {
+            "type": "string"
+          },
+          "hint": {
+            "type": "string"
+          },
+          "accepts": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Activity" }
-          },
-          "retrievedAt": { "type": "string", "format": "date-time" }
+            "description": "Both rails: USDC on Base and USDC on Solana.",
+            "items": {
+              "$ref": "#/components/schemas/PaymentRequirements"
+            }
+          }
         }
       }
     }

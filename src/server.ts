@@ -1,71 +1,66 @@
 /**
- * x402-activities — Express server with x402 payment middleware.
+ * x402-activities — Express server with the dual-rail x402 paywall.
  *
  * Paid routes return the purchased artifact directly in the 200 response body.
+ * Buyers pay in USDC on Base (EVM) or on Solana; the 402 challenge advertises
+ * both rails and the client picks.
  */
 import "dotenv/config";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
-import { paymentMiddleware } from "x402-express";
+import {
+  facilitatorUrl,
+  paywall,
+  rails,
+  solanaCheckoutRouter,
+  usingSuiteDefaultPayTo,
+  type RoutePrices,
+} from "./payments.js";
 import { hasAmadeusCredentials, searchActivities } from "./service.js";
 
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, "..", "public");
 
-const payTo = process.env.PAY_TO_ADDRESS;
-if (!payTo || !payTo.startsWith("0x")) {
-  console.error(
-    "FATAL: PAY_TO_ADDRESS is not set.\n" +
-      "Set PAY_TO_ADDRESS to the EVM address that should receive USDC payments,\n" +
-      'e.g. PAY_TO_ADDRESS=0xYourAddress npm run dev  (see .env.example)"',
-  );
-  process.exit(1);
-}
-
-const network = (process.env.NETWORK ?? "base-sepolia") as
-  | "base"
-  | "base-sepolia";
-const facilitatorUrl = (process.env.FACILITATOR_URL ??
-  "https://x402.org/facilitator") as `${string}://${string}`;
-
-const PRICES: Record<string, string> = {
-  "GET /search": "$0.003",
+/** Paid routes. Anything not listed here is free. */
+const ROUTES: RoutePrices = {
+  "GET /search": {
+    price: "$0.003",
+    description:
+      "Tours & activities search by location (Amadeus-backed). Returns activities with prices, ratings, durations and booking links.",
+    outputSchema: {
+      type: "object",
+      properties: {
+        source: { type: "string", enum: ["amadeus", "fixture"] },
+        count: { type: "integer" },
+        activities: { type: "array", items: { type: "object" } },
+      },
+    },
+  },
 };
 
 const app = express();
+app.disable("x-powered-by");
 app.use(express.json());
 
-// x402 payment middleware — free routes are not listed here.
-app.use(
-  paymentMiddleware(
-    payTo as `0x${string}`,
-    {
-      "GET /search": {
-        price: PRICES["GET /search"],
-        network,
-        config: {
-          description:
-            "Tours & activities search by location (Amadeus-backed). Returns activities with prices and booking links.",
-          mimeType: "application/json",
-        },
-      },
-    },
-    { url: facilitatorUrl },
-  ),
-);
+// Dual-rail x402 paywall: USDC on Base or Solana.
+app.use(paywall(ROUTES, { service: "x402-activities" }));
 
-// Static site (includes /.well-known/x402 as a plain file).
-app.use(express.static(publicDir));
+// Optional: browser (Phantom) Solana checkout helper. No-op when the modal
+// package is not installed — agent clients never need it.
+const checkoutRouter = await solanaCheckoutRouter();
+if (checkoutRouter) app.use("/api/x402-checkout", checkoutRouter);
 
-// Serve the discovery manifest with an explicit JSON content type.
+// Discovery manifest — registered before express.static so it keeps an explicit
+// application/json content type (the file has no extension).
 app.get("/.well-known/x402", (_req, res) => {
-  res
-    .type("application/json")
-    .sendFile(join(publicDir, ".well-known", "x402"));
+  res.type("application/json").sendFile(join(publicDir, ".well-known", "x402"));
 });
+
+// Static site.
+app.use(express.static(publicDir));
 
 // Free: service info.
 app.get("/", (_req, res) => {
@@ -73,7 +68,12 @@ app.get("/", (_req, res) => {
     name: "x402-activities",
     description:
       "Tours and activities search via Amadeus — agents find bookable experiences by location",
-    payment: { protocol: "x402", network, asset: "USDC", payTo },
+    payment: {
+      protocol: "x402",
+      note: "Pay in USDC on Base or Solana — your client picks the rail.",
+      facilitator: facilitatorUrl(),
+      rails: rails(),
+    },
     backend: hasAmadeusCredentials()
       ? { source: "amadeus", live: true }
       : {
@@ -83,13 +83,15 @@ app.get("/", (_req, res) => {
         },
     routes: {
       "GET /search": {
-        price: PRICES["GET /search"],
+        price: "$0.003",
         params: "lat, lon, radius (km, optional, default 1, max 20)",
+        returns: "activities with prices, ratings, durations and booking links",
       },
       "GET /health": { price: "free" },
       "GET /.well-known/x402": { price: "free" },
     },
     docs: "https://nirholas.github.io/x402-activities/",
+    skill: "https://github.com/nirholas/x402-activities/blob/main/skill.md",
   });
 });
 
@@ -125,8 +127,7 @@ app.get("/search", async (req, res) => {
     return;
   }
   try {
-    const result = await searchActivities(lat, lon, radius);
-    res.json(result);
+    res.json(await searchActivities(lat, lon, radius));
   } catch (err) {
     res.status(502).json({
       error: "upstream_error",
@@ -139,15 +140,24 @@ const port = Number(process.env.PORT ?? 4021);
 app.listen(port, () => {
   const pkg = require("../package.json") as { version: string };
   console.log(`x402-activities v${pkg.version} listening on :${port}`);
-  console.log(`  network:     ${network}`);
-  console.log(`  facilitator: ${facilitatorUrl}`);
-  console.log(`  payTo:       ${payTo}`);
+  console.log("  payment rails:");
+  for (const rail of rails()) {
+    console.log(
+      `    ${rail.rail === "evm" ? "EVM   " : "Solana"}  ${rail.network.padEnd(14)} ${rail.asset} → ${rail.payTo}`,
+    );
+  }
+  console.log(`  facilitator: ${facilitatorUrl()}`);
+  if (usingSuiteDefaultPayTo()) {
+    console.log(
+      "  note:        using suite default payTo — set PAY_TO_ADDRESS/SOLANA_PAY_TO_ADDRESS to receive funds yourself",
+    );
+  }
   console.log(
     `  backend:     ${hasAmadeusCredentials() ? "Amadeus (live)" : "fixtures (set AMADEUS_CLIENT_ID/SECRET for live data)"}`,
   );
   console.log("  paid routes:");
-  for (const [route, price] of Object.entries(PRICES)) {
-    console.log(`    ${route}  ${price}`);
+  for (const [route, spec] of Object.entries(ROUTES)) {
+    console.log(`    ${route.padEnd(28)} ${typeof spec === "string" ? spec : spec.price}`);
   }
   console.log("  free routes: GET /, GET /health, GET /.well-known/x402");
 });
