@@ -1,0 +1,47 @@
+{
+  "name": "x402-activities",
+  "version": "0.1.0",
+  "description": "Tours and activities search via Amadeus — agents find bookable experiences by location",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "dist/server.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nirholas/x402-activities"
+  },
+  "homepage": "https://nirholas.github.io/x402-activities/",
+  "keywords": [
+    "x402",
+    "micropayments",
+    "usdc",
+    "ai-agents",
+    "agentic-commerce",
+    "amadeus",
+    "tours",
+    "activities",
+    "travel",
+    "experiences"
+  ],
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "client": "tsx examples/agent-client.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "x402-express": "^1.2.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "viem": "^2.21.55",
+    "x402-fetch": "^1.2.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

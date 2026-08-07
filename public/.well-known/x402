@@ -1,0 +1,54 @@
+{
+  "x402Version": 1,
+  "name": "x402-activities",
+  "description": "Tours and activities search via Amadeus — agents find bookable experiences by location",
+  "resources": [
+    {
+      "resource": "GET /search",
+      "description": "Search tours & activities around a coordinate. Params: lat (required), lon (required), radius km (optional, default 1, max 20). Returns activities with names, descriptions, prices, ratings, and booking links.",
+      "price": "$0.003",
+      "network": "base-sepolia",
+      "asset": "USDC",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "source": { "type": "string", "enum": ["amadeus", "fixture"] },
+          "query": {
+            "type": "object",
+            "properties": {
+              "latitude": { "type": "number" },
+              "longitude": { "type": "number" },
+              "radiusKm": { "type": "number" }
+            }
+          },
+          "count": { "type": "integer" },
+          "activities": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "shortDescription": { "type": "string" },
+                "latitude": { "type": "number" },
+                "longitude": { "type": "number" },
+                "price": {
+                  "type": ["object", "null"],
+                  "properties": {
+                    "amount": { "type": "string" },
+                    "currencyCode": { "type": "string" }
+                  }
+                },
+                "rating": { "type": ["number", "null"] },
+                "pictures": { "type": "array", "items": { "type": "string" } },
+                "bookingLink": { "type": ["string", "null"] },
+                "minimumDuration": { "type": ["string", "null"] }
+              }
+            }
+          },
+          "retrievedAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  ]
+}
