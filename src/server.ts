@@ -18,6 +18,7 @@ import {
   usingSuiteDefaultPayTo,
   type RoutePrices,
 } from "./payments.js";
+import { ROUTE_SCHEMAS } from "./schemas.js";
 import { hasAmadeusCredentials, searchActivities } from "./service.js";
 
 const require = createRequire(import.meta.url);
@@ -30,14 +31,7 @@ const ROUTES: RoutePrices = {
     price: "$0.003",
     description:
       "Tours & activities search by location (Amadeus-backed). Returns activities with prices, ratings, durations and booking links.",
-    outputSchema: {
-      type: "object",
-      properties: {
-        source: { type: "string", enum: ["amadeus", "fixture"] },
-        count: { type: "integer" },
-        activities: { type: "array", items: { type: "object" } },
-      },
-    },
+    outputSchema: ROUTE_SCHEMAS["GET /search"],
   },
 };
 
@@ -59,11 +53,18 @@ app.get("/.well-known/x402", (_req, res) => {
   res.type("application/json").sendFile(join(publicDir, ".well-known", "x402"));
 });
 
-// Static site.
-app.use(express.static(publicDir));
+// Static site. `index: false` keeps `GET /` on the handler below, which serves
+// the landing page to browsers and the JSON service descriptor to agents.
+app.use(express.static(publicDir, { index: false }));
 
-// Free: service info.
-app.get("/", (_req, res) => {
+// Free: service info. Content-negotiated — `Accept: text/html` (a browser, or a
+// crawler looking for title/description/favicon/og:image) gets the landing page;
+// everything else, including `Accept: */*`, gets the JSON descriptor.
+app.get("/", (req, res) => {
+  if (req.accepts(["json", "html"]) === "html") {
+    res.sendFile(join(publicDir, "index.html"));
+    return;
+  }
   res.json({
     name: "x402-activities",
     description:

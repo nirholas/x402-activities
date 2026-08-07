@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-label="x402-activities">
+  <rect width="1200" height="630" fill="#0b0d12"/>
+  <rect x="0" y="0" width="1200" height="6" fill="#f97316"/>
+  <text x="80" y="250" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="76" font-weight="700" fill="#f2f4f8">x402-activities</text>
+  <text x="80" y="320" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="32" fill="#9aa4b2">Tours and activities search via Amadeus — agents find bookable experiences by </text>
+  <text x="80" y="380" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="32" fill="#9aa4b2">location</text>
+  <text x="80" y="530" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="30" fill="#f97316">HTTP 402 · USDC on Base or Solana · pay-per-call</text>
+</svg>
