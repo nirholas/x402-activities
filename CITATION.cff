@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: If you use this software, please cite it as below.
+title: "x402-activities"
+abstract: "Tours and activities search via Amadeus: agents find bookable experiences by location, paid per query in USDC on Base or Solana via x402"
+license: Apache-2.0
+repository-code: "https://github.com/nirholas/x402-activities"
+url: "https://three.ws"
+authors:
+  - name: three.ws
+    website: "https://three.ws"

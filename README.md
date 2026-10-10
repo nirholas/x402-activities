@@ -121,3 +121,26 @@ Apache-2.0. Part of the [x402 Suite](https://github.com/nirholas/x402-suite).
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=nirholas/x402-activities&type=Date)](https://www.star-history.com/#nirholas/x402-activities&Date)
+
+<!-- three.ws:growth -->
+## Support the project
+
+If x402-activities saves you time, **[star it on GitHub](https://github.com/nirholas/x402-activities)**. Stars are how other developers and AI agents find the repositories worth trusting, and they cost you one click.
+
+Know someone who would use it? [Post on X](https://twitter.com/intent/tweet?text=x402-activities%3A%20Tours%20and%20activities%20search%20via%20Amadeus%3A%20agents%20find%20bookable%20experiences%20by%20location%2C%20paid%20per&url=https%3A%2F%2Fgithub.com%2Fnirholas%2Fx402-activities) · [Share on Bluesky](https://bsky.app/intent/compose?text=x402-activities%3A%20Tours%20and%20activities%20search%20via%20Amadeus%3A%20agents%20find%20bookable%20experiences%20by%20location%2C%20paid%20per%20https%3A%2F%2Fgithub.com%2Fnirholas%2Fx402-activities) · [Share on LinkedIn](https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fgithub.com%2Fnirholas%2Fx402-activities) · [Submit to Hacker News](https://news.ycombinator.com/submitlink?u=https%3A%2F%2Fgithub.com%2Fnirholas%2Fx402-activities&t=x402-activities%3A%20Tours%20and%20activities%20search%20via%20Amadeus%3A%20agents%20find%20bookable%20experiences%20by%20location%2C%20paid%20per) · [Share on Reddit](https://www.reddit.com/submit?url=https%3A%2F%2Fgithub.com%2Fnirholas%2Fx402-activities&title=x402-activities%3A%20Tours%20and%20activities%20search%20via%20Amadeus%3A%20agents%20find%20bookable%20experiences%20by%20location%2C%20paid%20per)
+
+## Built for AI agents too
+
+Coding agents and LLM tooling can read this repo directly: [AGENTS.md](./AGENTS.md), [llms.txt](./llms.txt), [llms-full.txt](./llms-full.txt). Point an agent at `https://github.com/nirholas/x402-activities` and it has the context it needs.
+
+## More from the same author
+
+- [All repositories by nirholas](https://github.com/nirholas/nirholas#readme): the full catalog, grouped by topic
+- [three.ws](https://three.ws): the platform for 3D AI agents with Solana wallets, a skill marketplace and x402 payments
+- Questions or ideas: [open an issue](https://github.com/nirholas/x402-activities/issues) or [start a discussion](https://github.com/nirholas/x402-activities/discussions)
+
+## Contributors
+
+[![Contributors](https://contrib.rocks/image?repo=nirholas/x402-activities)](https://github.com/nirholas/x402-activities/graphs/contributors)
+
+<!-- /three.ws:growth -->
