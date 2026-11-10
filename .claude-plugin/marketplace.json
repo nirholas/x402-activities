@@ -1,0 +1,22 @@
+{
+  "name": "x402-activities",
+  "owner": {
+    "name": "nirholas"
+  },
+  "description": "Self-hosted tours and activities search over the Amadeus API, priced per query over x402.",
+  "plugins": [
+    {
+      "name": "x402-activities",
+      "source": "./plugins/x402-activities",
+      "description": "Self-hosted tours and activities search over the Amadeus API, priced per query over x402.",
+      "category": "data",
+      "tags": [
+        "x402",
+        "travel",
+        "activities",
+        "amadeus",
+        "agents"
+      ]
+    }
+  ]
+}
